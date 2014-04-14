@@ -1,11 +1,12 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 /*
 	Global settings
 */
 
-int HIDDEN_LAYERS = 5;
-int NEURONS_IN_LAYER = 100;
+int HIDDEN_GROUPS = 5;
+int NEURONS_IN_GROUP = 100;
 int EMULATION = 1;
 
 /*
@@ -20,12 +21,17 @@ typedef float FLOAT_TYPE;
 typedef struct
 {
 	/* full matrix NEURONS_IN_LAYER * NEURONS_IN_LAYER
-	   weight from 1 to 2 is in w[1 + 2 * NEURONS_IN_LAYER] */
+	   weight from 1 to 2 is in w[1 + 2 * NEURONS_IN_LAYER]  */
 	FLOAT_TYPE *w;
+	/*	0 .. NEURONS_IN_LAYER 
+		Fixed input (addes every step to potential of the neuron) */
+	FLOAT_TYPE *inputs;
 	/* 0 .. NEURONS_IN_LAYER */
 	FLOAT_TYPE *tresholds;
 	/* 0 .. NEURONS_IN_LAYER */
 	FLOAT_TYPE *potentials;
+	/* is each neuron active in the curren step */
+	unsigned char *active; 
 } TGroupInternal;
 
 /* Connection between groups*/
@@ -66,12 +72,44 @@ __global__ void VecAdd(float* A, float* B, float* C)
 	C[i] = A[i] + B[i];
 }
 
+void initGroup(int hiddenGroups, int neuronsInGroup, TGroup *group)
+{
+	
+}
 
+void doneGroup(TGroup *group)
+{
+
+}
+
+void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
+{
+	int i;
+	int limit = hiddenGroups + 2;
+	net->groupCount = limit;
+	net->groups = (TGroup *) malloc(sizeof(TGroup) * limit);
+	for (i = 0; i < limit; i++)
+	{
+		initGroup(hiddenGroups, neuronsInGroup, net->groups + i);
+	}
+}
+
+void doneNetwork(TNetwork *net)
+{
+	int i;
+	for (i = 0; i < net->groupCount; i++)
+	{
+		doneGroup(net->groups + i);
+	}
+	free(net->groups);
+}
 
 int main(void)
 {
-
-
+	TNetwork net;
+	srand(time(NULL));
+	initNetwork(HIDDEN_GROUPS, NEURONS_IN_GROUP, &net);
+	doneNetwork(&net);
 	/* VecAdd<<<1, N>>>(A, B, C); */
 
 	return 0;
