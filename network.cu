@@ -50,10 +50,11 @@ typedef struct
 {
 	/* Internal group data */
 	TGroupInternal inside;
-	/* Connection inside the group
+	/* Connections from another group
 	   connections[1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
 	TConnection **connections;
+	int *connectionCount;
 } TGroup;
 
 typedef struct
@@ -72,14 +73,53 @@ __global__ void VecAdd(float* A, float* B, float* C)
 	C[i] = A[i] + B[i];
 }
 
-void initGroup(int hiddenGroups, int neuronsInGroup, TGroup *group)
+void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 {
-	
+	int i;
+
+	group->connections = (TConnection **) malloc(sizeof(TConnection *) * 
+		neuronsInGroup);
+	group->connectionCount = (int *) malloc(sizeof(int) * neuronsInGroup);
+	for (i = 0; i < neuronsInGroup; i++)
+	{
+		int j;
+
+		/* init connections from other groups */
+		group->connectionCount[i] = rand() % 8;
+		group->connections[i] = (TConnection *)
+			malloc((sizeof(TConnection *) * group->connectionCount[i]));
+		for (j = 0; j < group->connectionCount[i]; j++)
+		{
+			TConnection *conn = group->connections[i] + j;
+			conn->group = rand() % (hiddenGroups + 2);
+			conn->neuron = rand() % neuronsInGroup;
+			conn->w = (rand() & 0xFF) / (FLOAT_TYPE)512.0;
+		}
+	}
+	/* init connections inside this group */
+ 	for (i = 0; i < neuronsInGroup * neuronsInGroup; i++)
+	{
+		group->inside.w[i] = (rand() & 0xFF) / (FLOAT_TYPE)512.0;
+	}
+	/* init all the data for each neuron */
+	for (i = 0; i < neuronsInGroup; i++)
+	{
+		group->inside.inputs[i] = (i ? 0 : (rand() & 1));
+		group->inside.tresholds[i] = (rand() & 0xFF) / (FLOAT_TYPE) 128.0;
+		group->inside.potentials[i] = 0;
+		group->inside.active[i] = 0;
+	}
 }
 
-void doneGroup(TGroup *group)
+void doneGroup(int neuronsInGroup, TGroup *group)
 {
-
+	int i;
+	for (i = 0; i < neuronsInGroup; i++)
+	{
+		free(group->connections[i]);
+	}
+	free(group->connections);
+	free(group->connectionCount);
 }
 
 void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
@@ -90,16 +130,16 @@ void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
 	net->groups = (TGroup *) malloc(sizeof(TGroup) * limit);
 	for (i = 0; i < limit; i++)
 	{
-		initGroup(hiddenGroups, neuronsInGroup, net->groups + i);
+		initGroup(hiddenGroups, neuronsInGroup, i, net->groups + i);
 	}
 }
 
-void doneNetwork(TNetwork *net)
+void doneNetwork(int neuronsInGroup, TNetwork *net)
 {
 	int i;
 	for (i = 0; i < net->groupCount; i++)
 	{
-		doneGroup(net->groups + i);
+		doneGroup(neuronsInGroup, net->groups + i);
 	}
 	free(net->groups);
 }
@@ -109,7 +149,7 @@ int main(void)
 	TNetwork net;
 	srand(time(NULL));
 	initNetwork(HIDDEN_GROUPS, NEURONS_IN_GROUP, &net);
-	doneNetwork(&net);
+	doneNetwork(NEURONS_IN_GROUP, &net);
 	/* VecAdd<<<1, N>>>(A, B, C); */
 
 	return 0;
