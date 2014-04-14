@@ -129,6 +129,10 @@ void doneGroup(int neuronsInGroup, TGroup *group)
 	}
 	free(group->connections);
 	free(group->connectionCount);
+	free(group->inside.inputs);
+	free(group->inside.tresholds);
+	free(group->inside.potentials);
+	free(group->inside.active);
 }
 
 void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
