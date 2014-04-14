@@ -12,7 +12,7 @@ int EMULATION = 1;
 	Global types
 */
 
-typedef FLOAT_TYPE float;
+typedef float FLOAT_TYPE;
 
 /*
 	Data inside of each group (without connections to other groups)
@@ -48,7 +48,15 @@ typedef struct
 	   connections[1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
 	TConnection **connections;
-}
+} TGroup;
+
+typedef struct
+{
+	/* All groups, the first is input, the last is output. */
+	TGroup *groups;
+	/* Including input and output */
+	int groupCount;
+} TNetwork;
 
 
 // Kernel definition
@@ -62,20 +70,9 @@ __global__ void VecAdd(float* A, float* B, float* C)
 
 int main(void)
 {
-	float A[N];
-	float B[N];
-	float C[N];
 
-	int i;
 
-	for (i = 0; i < N; i++)
-	{
-		A[i]=i; B[i]=10;
-	}
-
-	VecAdd<<<1, N>>>(A, B, C);
-
-	printf("je to %i\n", (int)A[5]);
+	/* VecAdd<<<1, N>>>(A, B, C); */
 
 	return 0;
 }
