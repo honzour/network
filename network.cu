@@ -97,11 +97,20 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 		}
 	}
 	/* init connections inside this group */
+	group->inside.w = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
+		neuronsInGroup * neuronsInGroup);
  	for (i = 0; i < neuronsInGroup * neuronsInGroup; i++)
 	{
 		group->inside.w[i] = (rand() & 0xFF) / (FLOAT_TYPE)512.0;
 	}
 	/* init all the data for each neuron */
+	group->inside.inputs = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
+		neuronsInGroup);
+	group->inside.tresholds = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
+		neuronsInGroup);
+	group->inside.potentials = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
+		neuronsInGroup);
+	group->inside.active = (unsigned char *) malloc(neuronsInGroup);
 	for (i = 0; i < neuronsInGroup; i++)
 	{
 		group->inside.inputs[i] = (i ? 0 : (rand() & 1));
