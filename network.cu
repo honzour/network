@@ -87,7 +87,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 		/* init connections from other groups */
 		group->connectionCount[i] = rand() % 8;
 		group->connections[i] = (TConnection *)
-			malloc((sizeof(TConnection *) * group->connectionCount[i]));
+			malloc(sizeof(TConnection) * group->connectionCount[i]);
 		for (j = 0; j < group->connectionCount[i]; j++)
 		{
 			TConnection *conn = group->connections[i] + j;
