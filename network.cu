@@ -144,11 +144,26 @@ void doneNetwork(int neuronsInGroup, TNetwork *net)
 	free(net->groups);
 }
 
+void step(TNetwork *net)
+{
+}
+
+void printResult(TNetwork *net)
+{
+}
+
+
 int main(void)
 {
+	int i;
 	TNetwork net;
 	srand(time(NULL));
 	initNetwork(HIDDEN_GROUPS, NEURONS_IN_GROUP, &net);
+	for (i = 0; i < 1000; i++)
+	{
+		step(&net);
+		printResult(&net);
+	}
 	doneNetwork(NEURONS_IN_GROUP, &net);
 	/* VecAdd<<<1, N>>>(A, B, C); */
 
