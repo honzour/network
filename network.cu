@@ -20,15 +20,15 @@ typedef float FLOAT_TYPE;
 */
 typedef struct
 {
-	/* full matrix NEURONS_IN_LAYER * NEURONS_IN_LAYER
-	   weight from 1 to 2 is in w[1 + 2 * NEURONS_IN_LAYER]  */
+	/* full matrix NEURONS_IN_GROUP * NEURONS_IN_GROUP
+	   weight from 1 to 2 is in w[1 + 2 * NEURONS_IN_GROUP]  */
 	FLOAT_TYPE *w;
-	/*	0 .. NEURONS_IN_LAYER 
+	/*	0 .. NEURONS_IN_GROUP
 		Fixed input (addes every step to potential of the neuron) */
 	FLOAT_TYPE *inputs;
-	/* 0 .. NEURONS_IN_LAYER */
+	/* 0 .. NEURONS_IN_GROUP */
 	FLOAT_TYPE *tresholds;
-	/* 0 .. NEURONS_IN_LAYER */
+	/* 0 .. NEURONS_IN_GROUP */
 	FLOAT_TYPE *potentials;
 	/* is each neuron active in the curren step */
 	unsigned char *active; 
@@ -159,10 +159,78 @@ void doneNetwork(int neuronsInGroup, TNetwork *net)
 
 void step(TNetwork *net)
 {
+	int i;
+
+	/* The first step which is hard to make paralell 
+		- connections from other group, it is hard to separate the memory */
+
+	for (i = 0; i < net->groupCount; i++)
+	{
+		int j;
+
+		TGroup *group = net->groups + i;
+		for (j = 0; j < NEURONS_IN_GROUP; j++)
+		{
+			int k;
+			for (k = 0; k < group->connectionCount[j]; k++)
+			{
+				TConnection *conn = group->connections[j] + k;
+				if (net->groups[conn->group].inside.active[conn->neuron])
+				{
+					group->inside.potentials[j] += conn->w;
+				}
+			}
+		}
+	}
+
+	/* The second step should be done paralell */
+	for (i = 0; i < net->groupCount; i++)
+	{
+		int j, k;
+		TGroup *group = net->groups + i;
+	
+		for (j = 0; j < NEURONS_IN_GROUP; j++)
+		{
+			/* Add bonus from connection inside of the group to potential of each
+		   	   neuron. */
+
+			FLOAT_TYPE *ptrW = group->inside.w + j * NEURONS_IN_GROUP;
+			unsigned char *ptrA = group->inside.active;
+			for (k = 0; k < NEURONS_IN_GROUP; k++)
+			{
+				if (*ptrA)
+				{
+					group->inside.potentials[j] += *ptrW;
+				} 
+				ptrW++;
+				ptrA++;
+			}
+			/* Add input to the potential */ 
+			group->inside.potentials[j] += group->inside.inputs[j];
+
+			/* Check tresholds and set active neuron*/
+			if (group->inside.potentials[j] >= group->inside.tresholds[j])
+			{
+				group->inside.potentials[j] = 0;
+				group->inside.active[j] = 1;
+			}
+			else
+			{
+				group->inside.active[j] = 0;
+			}
+		}
+	}
 }
 
 void printResult(TNetwork *net)
 {
+	int i;
+	TGroup *last = net->groups + (net->groupCount - 1);
+	for (i = 0; i < NEURONS_IN_GROUP; i++)
+	{
+		putchar(last->inside.active[i] ? '1' : '0');
+	}
+	puts("");
 }
 
 
@@ -172,7 +240,7 @@ int main(void)
 	TNetwork net;
 	srand(time(NULL));
 	initNetwork(HIDDEN_GROUPS, NEURONS_IN_GROUP, &net);
-	for (i = 0; i < 1000; i++)
+	for (i = 0; i < 10; i++)
 	{
 		step(&net);
 		printResult(&net);
