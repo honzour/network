@@ -15,7 +15,7 @@ int EMULATION = 1;
 
 typedef float FLOAT_TYPE;
 
-/*
+/**
 	Data inside of each group (without connections to other groups)
 */
 typedef struct
@@ -34,45 +34,58 @@ typedef struct
 	unsigned char *active; 
 } TGroupInternal;
 
-/* Connection between groups*/
+/**
+ Connection between groups
+ */
 typedef struct
 {
-	/* from group index */
+	/** from group index */
 	int group;
-	/* from neuron (inside of the group) index */
+	/** from neuron (inside of the group) index */
 	int neuron;
-	/* weight */
+	/** weight */
 	FLOAT_TYPE w;
 } TConnection;
 
-/* Group inluding without connections to other groups */
+/** Group inluding without connections to other groups */
 typedef struct
 {
-	/* Internal group data */
+	/** Internal group data */
 	TGroupInternal inside;
-	/* Connections from another group
+	/** Connections from another group
 	   connections[1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
 	TConnection **connections;
 	int *connectionCount;
 } TGroup;
 
+/**
+ All the network.
+ */
 typedef struct
 {
-	/* All groups, the first is input, the last is output. */
+	/** All groups, the first is input, the last is output. */
 	TGroup *groups;
 	/* Including input and output */
 	int groupCount;
 } TNetwork;
 
-
+/*
 // Kernel definition
 __global__ void VecAdd(float* A, float* B, float* C)
 {
 	int i = threadIdx.x;
 	C[i] = A[i] + B[i];
 }
+*/
 
+/**
+	Init a single group of neurons
+	@param hiddenGroups count of hidden (non input non output) groups in the whole network
+	@param neuronsInGroup neuron count in (any) group
+ 	@param index index of this group
+	@param group group to init
+ */ 
 void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 {
 	int i;
@@ -120,6 +133,9 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 	}
 }
 
+/**
+ Releases all the memory used by the group and its neuron.
+ */
 void doneGroup(int neuronsInGroup, TGroup *group)
 {
 	int i;
@@ -135,6 +151,9 @@ void doneGroup(int neuronsInGroup, TGroup *group)
 	free(group->inside.active);
 }
 
+/**
+ Inits every single group of the network. 
+ */
 void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
 {
 	int i;
@@ -147,6 +166,9 @@ void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
 	}
 }
 
+/**
+ Releases all the memory used by the network.
+ */
 void doneNetwork(int neuronsInGroup, TNetwork *net)
 {
 	int i;
@@ -157,6 +179,9 @@ void doneNetwork(int neuronsInGroup, TNetwork *net)
 	free(net->groups);
 }
 
+/**
+ Single step of the computing
+ */
 void step(TNetwork *net)
 {
 	int i;
@@ -164,19 +189,24 @@ void step(TNetwork *net)
 	/* The first step which is hard to make paralell 
 		- connections from other group, it is hard to separate the memory */
 
+	/* for each group */
 	for (i = 0; i < net->groupCount; i++)
 	{
 		int j;
 
 		TGroup *group = net->groups + i;
+		/* for each neuron in the group */
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
 			int k;
+			/* for each connection (from the other group) of the neuron */
 			for (k = 0; k < group->connectionCount[j]; k++)
 			{
 				TConnection *conn = group->connections[j] + k;
+				/* if the other neuron is active*/
 				if (net->groups[conn->group].inside.active[conn->neuron])
 				{
+					/* add a bonus to our potential */
 					group->inside.potentials[j] += conn->w;
 				}
 			}
@@ -184,22 +214,26 @@ void step(TNetwork *net)
 	}
 
 	/* The second step should be done paralell */
+
+	/* for each group */
 	for (i = 0; i < net->groupCount; i++)
 	{
 		int j, k;
 		TGroup *group = net->groups + i;
-	
+
+		/* for each neuron in the group */
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
-			/* Add bonus from connection inside of the group to potential of each
-		   	   neuron. */
 
 			FLOAT_TYPE *ptrW = group->inside.w + j * NEURONS_IN_GROUP;
 			unsigned char *ptrA = group->inside.active;
+
+			/* for each connection */
 			for (k = 0; k < NEURONS_IN_GROUP; k++)
 			{
 				if (*ptrA)
 				{
+					/* add the weight if the neuron is active */
 					group->inside.potentials[j] += *ptrW;
 				} 
 				ptrW++;
@@ -222,6 +256,7 @@ void step(TNetwork *net)
 	}
 }
 
+/* print the output of thenetwork */
 void printResult(TNetwork *net)
 {
 	int i;
