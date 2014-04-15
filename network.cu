@@ -106,7 +106,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 			TConnection *conn = group->connections[i] + j;
 			conn->group = rand() % (hiddenGroups + 2);
 			conn->neuron = rand() % neuronsInGroup;
-			conn->w = (rand() & 0xFF) / (FLOAT_TYPE)512.0;
+			conn->w = (rand() & 0xFF) / (FLOAT_TYPE)10000.0;
 		}
 	}
 	/* init connections inside this group */
@@ -114,7 +114,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 		neuronsInGroup * neuronsInGroup);
  	for (i = 0; i < neuronsInGroup * neuronsInGroup; i++)
 	{
-		group->inside.w[i] = (rand() & 0xFF) / (FLOAT_TYPE)512.0;
+		group->inside.w[i] = (rand() & 0xFF) / (FLOAT_TYPE)10000.0;
 	}
 	/* init all the data for each neuron */
 	group->inside.inputs = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
@@ -126,7 +126,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 	group->inside.active = (unsigned char *) malloc(neuronsInGroup);
 	for (i = 0; i < neuronsInGroup; i++)
 	{
-		group->inside.inputs[i] = (i ? 0 : (rand() & 1));
+		group->inside.inputs[i] = index ? 0 : ((rand() & 0xFF) / (FLOAT_TYPE)10000.0);
 		group->inside.tresholds[i] = (1 + (rand() & 0xFF)) / (FLOAT_TYPE) 128.0;
 		group->inside.potentials[i] = 0;
 		group->inside.active[i] = 0;
@@ -207,7 +207,7 @@ void step(TNetwork *net)
 				if (net->groups[conn->group].inside.active[conn->neuron])
 				{
 					/* add a bonus to our potential */
-					//group->inside.potentials[j] += conn->w;
+					group->inside.potentials[j] += conn->w;
 				}
 			}
 		}
@@ -234,18 +234,17 @@ void step(TNetwork *net)
 				if (*ptrA)
 				{
 					/* add the weight if the neuron is active */
-					// group->inside.potentials[j] += *ptrW;
+					group->inside.potentials[j] += *ptrW;
 				} 
 				ptrW++;
 				ptrA++;
 			}
 			/* Add input to the potential */ 
-			//group->inside.potentials[j] += group->inside.inputs[j];
+			group->inside.potentials[j] += group->inside.inputs[j];
 
 			/* Check tresholds and set active neuron*/
 			if (group->inside.potentials[j] >= group->inside.tresholds[j])
 			{
-			//	printf("jau %i %i %f >= %f ", i, j, (double) group->inside.potentials[j], (double) group->inside.tresholds[j]);
 				group->inside.potentials[j] = 0;
 				group->inside.active[j] = 1;
 			}
@@ -276,7 +275,7 @@ int main(void)
 	TNetwork net;
 	srand(time(NULL));
 	initNetwork(HIDDEN_GROUPS, NEURONS_IN_GROUP, &net);
-	for (i = 0; i < 10; i++)
+	for (i = 0; i < 1000; i++)
 	{
 		step(&net);
 		printResult(&net);
