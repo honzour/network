@@ -5,9 +5,30 @@
 	Global settings
 */
 
-int HIDDEN_GROUPS = 5;
-int NEURONS_IN_GROUP = 100;
-int EMULATION = 1;
+/* Compile as emulation or use CUDA */
+#define EMULATION 1
+
+/* Number of non input and non output groups of neuron */
+#define HIDDEN_GROUPS 5
+
+/* Number of neuron in each group */
+
+#define NEURONS_IN_GROUP 100
+
+/* Divide each float coef by this */
+#define DIVIDE_COEF 8192
+
+/* bigger TRESHOLD_RAND -> bigger tresholds */
+#define TRESHOLD_RAND 1024
+
+/* maximal number of external connections */
+#define MAX_EXTERNAL_CONNECTIONS 8
+
+/* bigger WEIGHT_RAND -> bigger weights */
+#define WEIGHT_RAND 256
+
+/* bigger WEIGHT_RAND -> bigger input in the input layer */
+#define INPUT_RAND 256
 
 /*
 	Global types
@@ -98,7 +119,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 		int j;
 
 		/* init connections from other groups */
-		group->connectionCount[i] = rand() % 8;
+		group->connectionCount[i] = rand() % MAX_EXTERNAL_CONNECTIONS;
 		group->connections[i] = (TConnection *)
 			malloc(sizeof(TConnection) * group->connectionCount[i]);
 		for (j = 0; j < group->connectionCount[i]; j++)
@@ -106,7 +127,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 			TConnection *conn = group->connections[i] + j;
 			conn->group = rand() % (hiddenGroups + 2);
 			conn->neuron = rand() % neuronsInGroup;
-			conn->w = (rand() & 0xFF) / (FLOAT_TYPE)10000.0;
+			conn->w = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 		}
 	}
 	/* init connections inside this group */
@@ -114,7 +135,7 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 		neuronsInGroup * neuronsInGroup);
  	for (i = 0; i < neuronsInGroup * neuronsInGroup; i++)
 	{
-		group->inside.w[i] = (rand() & 0xFF) / (FLOAT_TYPE)10000.0;
+		group->inside.w[i] = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 	}
 	/* init all the data for each neuron */
 	group->inside.inputs = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
@@ -126,8 +147,10 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 	group->inside.active = (unsigned char *) malloc(neuronsInGroup);
 	for (i = 0; i < neuronsInGroup; i++)
 	{
-		group->inside.inputs[i] = index ? 0 : ((rand() & 0xFF) / (FLOAT_TYPE)10000.0);
-		group->inside.tresholds[i] = (1 + (rand() & 0xFF)) / (FLOAT_TYPE) 128.0;
+		group->inside.inputs[i] = index ? 0 : ((rand()  % INPUT_RAND) /
+			(FLOAT_TYPE) DIVIDE_COEF);
+		group->inside.tresholds[i] = (1 + (rand()  % TRESHOLD_RAND)) /
+			(FLOAT_TYPE) DIVIDE_COEF;
 		group->inside.potentials[i] = 0;
 		group->inside.active[i] = 0;
 	}
