@@ -25,15 +25,15 @@
 #define DIVIDE_COEF 8192
 
 /** bigger TRESHOLD_RAND -> bigger tresholds */
-#define TRESHOLD_RAND 1024
+#define TRESHOLD_RAND 32768
 
 /** maximal number of external connections */
 #define MAX_EXTERNAL_CONNECTIONS 8
 
 /** bigger WEIGHT_RAND -> bigger weights */
-#define WEIGHT_RAND 256
+#define WEIGHT_RAND 110
 
-/** bigger WEIGHT_RAND -> bigger input in the input layer */
+/** bigger INPUT_RAND -> bigger input in the input layer */
 #define INPUT_RAND 256
 
 /*
