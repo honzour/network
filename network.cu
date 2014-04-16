@@ -1,3 +1,9 @@
+/*
+@author Jan Nemec, jnem6403@seznam.cz
+
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -5,35 +11,36 @@
 	Global settings
 */
 
-/* Compile as emulation or use CUDA */
+/** Compile as emulation or use CUDA */
 #define EMULATION 1
 
-/* Number of non input and non output groups of neuron */
+/** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
 
-/* Number of neuron in each group */
+/** Number of neuron in each group */
 
 #define NEURONS_IN_GROUP 100
 
-/* Divide each float coef by this */
+/** Divide each float coef by this */
 #define DIVIDE_COEF 8192
 
-/* bigger TRESHOLD_RAND -> bigger tresholds */
+/** bigger TRESHOLD_RAND -> bigger tresholds */
 #define TRESHOLD_RAND 1024
 
-/* maximal number of external connections */
+/** maximal number of external connections */
 #define MAX_EXTERNAL_CONNECTIONS 8
 
-/* bigger WEIGHT_RAND -> bigger weights */
+/** bigger WEIGHT_RAND -> bigger weights */
 #define WEIGHT_RAND 256
 
-/* bigger WEIGHT_RAND -> bigger input in the input layer */
+/** bigger WEIGHT_RAND -> bigger input in the input layer */
 #define INPUT_RAND 256
 
 /*
 	Global types
 */
 
+/** we will compute in this type */
 typedef float FLOAT_TYPE;
 
 /**
@@ -264,8 +271,19 @@ void step(TNetwork *net)
 			}
 			/* Add input to the potential */ 
 			group->inside.potentials[j] += group->inside.inputs[j];
+		}
+	}
 
-			/* Check tresholds and set active neuron*/
+	/* for each group */
+	for (i = 0; i < net->groupCount; i++)
+	{
+		int j;
+		TGroup *group = net->groups + i;
+
+		/* for each neuron in the group */
+		for (j = 0; j < NEURONS_IN_GROUP; j++)
+		{
+		/* Check tresholds and set active neuron*/
 			if (group->inside.potentials[j] >= group->inside.tresholds[j])
 			{
 				group->inside.potentials[j] = 0;
