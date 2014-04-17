@@ -12,7 +12,7 @@
 */
 
 /** Compile as emulation or use CUDA */
-#define EMULATION 1
+#define EMULATION 0
 
 /** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
@@ -162,6 +162,8 @@ void initNetwork(TNetwork *net)
 	}
 }
 
+#if EMULATION
+
 /**
  Single step of the computing
  */
@@ -169,8 +171,7 @@ void step(TNetwork *net)
 {
 	int i;
 
-	/* The first step which is hard to make paralell 
-		- connections from other group, it is hard to separate the memory */
+	/* The first step - connections from other group */
 
 	/* for each group */
 	for (i = 0; i < GROUP_COUNT; i++)
@@ -196,7 +197,7 @@ void step(TNetwork *net)
 		}
 	}
 
-	/* The second step should be done paralell */
+	/* The second step */
 
 	/* for each group */
 	for (i = 0; i < GROUP_COUNT; i++)
@@ -262,6 +263,83 @@ void printResult(TNetwork *net)
 	puts("");
 }
 
+#else
+
+__global__ void updatePotentials(TNetwork *net)
+{
+	int g = threadIdx.x;
+    int n = threadIdx.y;
+
+	TGroup *group = net->groups + g;
+	/* for each neuron in the group */
+	
+	int k;
+	/* for each connection (from the other group) of the neuron */
+	for (k = 0; k < group->connectionCount[n]; k++)
+	{
+		TConnection *conn = group->connections[n] + k;
+		/* if the other neuron is active*/
+		if (net->groups[conn->group].inside.active[conn->neuron])
+		{
+			/* add a bonus to our potential */
+			group->inside.potentials[n] += conn->w;
+		}
+	}
+
+	FLOAT_TYPE *ptrW = group->inside.w + n * NEURONS_IN_GROUP;
+	unsigned char *ptrA = group->inside.active;
+
+	/* for each connection */
+	for (k = 0; k < NEURONS_IN_GROUP; k++)
+	{
+		if (*ptrA)
+		{
+			/* add the weight if the neuron is active */
+			group->inside.potentials[n] += *ptrW;
+		} 
+		ptrW++;
+		ptrA++;
+	}
+	/* Add input to the potential */ 
+	group->inside.potentials[n] += group->inside.inputs[n];
+}
+
+__global__ void updateActive(TNetwork *net)
+{
+	int g = threadIdx.x;
+    int n = threadIdx.y;
+
+	TGroup *group = net->groups + g;
+ 
+	if (group->inside.potentials[n] >= group->inside.tresholds[n])
+	{
+		group->inside.potentials[n] = 0;
+		group->inside.active[n] = 1;
+	}
+	else
+	{
+		group->inside.active[n] = 0;
+	}
+}
+
+/* print the output of thenetwork */
+void printResult(TNetwork *d_net)
+{
+
+	/* TODO do not copy all !!! */
+	TNetwork net;
+	cudaMemcpy(&net, d_net, sizeof(TNetwork), cudaMemcpyDeviceToHost);
+
+	int i;
+	TGroup *last = net.groups + (GROUP_COUNT - 1);
+	for (i = 0; i < NEURONS_IN_GROUP; i++)
+	{
+		putchar(last->inside.active[i] ? '1' : '0');
+	}
+	puts("");
+}
+#endif
+
 
 int main(void)
 {
@@ -269,6 +347,7 @@ int main(void)
 	TNetwork *net = (TNetwork *)malloc(sizeof(TNetwork));
 	srand(time(NULL));
 	initNetwork(net);
+
 #if EMULATION
 	for (i = 0; i < 1000; i++)
 	{
@@ -276,9 +355,18 @@ int main(void)
 		printResult(net);
 	}
 #else
+	
+	TNetwork *d_net;
+	cudaMalloc(&d_net, sizeof(TNetwork));
+	cudaMemcpy(d_net, net, sizeof(TNetwork), cudaMemcpyHostToDevice); 
+	for (i = 0; i < 1000; i++)
+	{
+		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
+		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
+		printResult(d_net);
+	}
+	cudaFree(d_net);
 #endif
-
-	/* VecAdd<<<1, N>>>(A, B, C); */
 
 	free(net);
 	return 0;
