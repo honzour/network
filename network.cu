@@ -266,16 +266,20 @@ void printResult(TNetwork *net)
 int main(void)
 {
 	int i;
-	TNetwork net;
+	TNetwork *net = (TNetwork *)malloc(sizeof(TNetwork));
 	srand(time(NULL));
-	initNetwork(&net);
+	initNetwork(net);
+#if EMULATION
 	for (i = 0; i < 1000; i++)
 	{
-		step(&net);
-		printResult(&net);
+		step(net);
+		printResult(net);
 	}
+#else
+#endif
 
 	/* VecAdd<<<1, N>>>(A, B, C); */
 
+	free(net);
 	return 0;
 }
