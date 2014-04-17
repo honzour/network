@@ -17,6 +17,8 @@
 /** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
 
+#define GROUP_COUNT (HIDDEN_GROUPS + 2)
+
 /** Number of neuron in each group */
 
 #define NEURONS_IN_GROUP 100
@@ -50,16 +52,16 @@ typedef struct
 {
 	/* full matrix NEURONS_IN_GROUP * NEURONS_IN_GROUP
 	   weight from 1 to 2 is in w[1 + 2 * NEURONS_IN_GROUP]  */
-	FLOAT_TYPE *w;
+	FLOAT_TYPE w[NEURONS_IN_GROUP * NEURONS_IN_GROUP];
 	/*	0 .. NEURONS_IN_GROUP
 		Fixed input (addes every step to potential of the neuron) */
-	FLOAT_TYPE *inputs;
+	FLOAT_TYPE inputs[NEURONS_IN_GROUP];
 	/* 0 .. NEURONS_IN_GROUP */
-	FLOAT_TYPE *tresholds;
+	FLOAT_TYPE tresholds[NEURONS_IN_GROUP];
 	/* 0 .. NEURONS_IN_GROUP */
-	FLOAT_TYPE *potentials;
+	FLOAT_TYPE potentials[NEURONS_IN_GROUP];
 	/* is each neuron active in the curren step */
-	unsigned char *active; 
+	unsigned char active[NEURONS_IN_GROUP]; 
 } TGroupInternal;
 
 /**
@@ -93,9 +95,7 @@ typedef struct
 typedef struct
 {
 	/** All groups, the first is input, the last is output. */
-	TGroup *groups;
-	/* Including input and output */
-	int groupCount;
+	TGroup groups[GROUP_COUNT];
 } TNetwork;
 
 /*
@@ -109,19 +109,17 @@ __global__ void VecAdd(float* A, float* B, float* C)
 
 /**
 	Init a single group of neurons
-	@param hiddenGroups count of hidden (non input non output) groups in the whole network
-	@param neuronsInGroup neuron count in (any) group
  	@param index index of this group
 	@param group group to init
  */ 
-void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
+void initGroup(int index, TGroup *group)
 {
 	int i;
 
 	group->connections = (TConnection **) malloc(sizeof(TConnection *) * 
-		neuronsInGroup);
-	group->connectionCount = (int *) malloc(sizeof(int) * neuronsInGroup);
-	for (i = 0; i < neuronsInGroup; i++)
+		NEURONS_IN_GROUP);
+	group->connectionCount = (int *) malloc(sizeof(int) * NEURONS_IN_GROUP);
+	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
 		int j;
 
@@ -132,27 +130,20 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 		for (j = 0; j < group->connectionCount[i]; j++)
 		{
 			TConnection *conn = group->connections[i] + j;
-			conn->group = rand() % (hiddenGroups + 2);
-			conn->neuron = rand() % neuronsInGroup;
+			conn->group = rand() % GROUP_COUNT;
+			conn->neuron = rand() % NEURONS_IN_GROUP;
 			conn->w = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 		}
 	}
 	/* init connections inside this group */
-	group->inside.w = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
-		neuronsInGroup * neuronsInGroup);
- 	for (i = 0; i < neuronsInGroup * neuronsInGroup; i++)
+	
+ 	for (i = 0; i < NEURONS_IN_GROUP * NEURONS_IN_GROUP; i++)
 	{
 		group->inside.w[i] = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 	}
 	/* init all the data for each neuron */
-	group->inside.inputs = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
-		neuronsInGroup);
-	group->inside.tresholds = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
-		neuronsInGroup);
-	group->inside.potentials = (FLOAT_TYPE *) malloc(sizeof(FLOAT_TYPE) *
-		neuronsInGroup);
-	group->inside.active = (unsigned char *) malloc(neuronsInGroup);
-	for (i = 0; i < neuronsInGroup; i++)
+	
+	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
 		group->inside.inputs[i] = index ? 0 : ((rand()  % INPUT_RAND) /
 			(FLOAT_TYPE) DIVIDE_COEF);
@@ -166,47 +157,40 @@ void initGroup(int hiddenGroups, int neuronsInGroup, int index, TGroup *group)
 /**
  Releases all the memory used by the group and its neuron.
  */
-void doneGroup(int neuronsInGroup, TGroup *group)
+void doneGroup(TGroup *group)
 {
 	int i;
-	for (i = 0; i < neuronsInGroup; i++)
+	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
 		free(group->connections[i]);
 	}
 	free(group->connections);
 	free(group->connectionCount);
-	free(group->inside.inputs);
-	free(group->inside.tresholds);
-	free(group->inside.potentials);
-	free(group->inside.active);
 }
 
 /**
  Inits every single group of the network. 
  */
-void initNetwork(int hiddenGroups, int neuronsInGroup, TNetwork *net)
+void initNetwork(TNetwork *net)
 {
 	int i;
-	int limit = hiddenGroups + 2;
-	net->groupCount = limit;
-	net->groups = (TGroup *) malloc(sizeof(TGroup) * limit);
-	for (i = 0; i < limit; i++)
+
+	for (i = 0; i < GROUP_COUNT; i++)
 	{
-		initGroup(hiddenGroups, neuronsInGroup, i, net->groups + i);
+		initGroup(i, net->groups + i);
 	}
 }
 
 /**
  Releases all the memory used by the network.
  */
-void doneNetwork(int neuronsInGroup, TNetwork *net)
+void doneNetwork(TNetwork *net)
 {
 	int i;
-	for (i = 0; i < net->groupCount; i++)
+	for (i = 0; i < GROUP_COUNT; i++)
 	{
-		doneGroup(neuronsInGroup, net->groups + i);
+		doneGroup(net->groups + i);
 	}
-	free(net->groups);
 }
 
 /**
@@ -220,7 +204,7 @@ void step(TNetwork *net)
 		- connections from other group, it is hard to separate the memory */
 
 	/* for each group */
-	for (i = 0; i < net->groupCount; i++)
+	for (i = 0; i < GROUP_COUNT; i++)
 	{
 		int j;
 
@@ -246,7 +230,7 @@ void step(TNetwork *net)
 	/* The second step should be done paralell */
 
 	/* for each group */
-	for (i = 0; i < net->groupCount; i++)
+	for (i = 0; i < GROUP_COUNT; i++)
 	{
 		int j, k;
 		TGroup *group = net->groups + i;
@@ -275,7 +259,7 @@ void step(TNetwork *net)
 	}
 
 	/* for each group */
-	for (i = 0; i < net->groupCount; i++)
+	for (i = 0; i < GROUP_COUNT; i++)
 	{
 		int j;
 		TGroup *group = net->groups + i;
@@ -301,7 +285,7 @@ void step(TNetwork *net)
 void printResult(TNetwork *net)
 {
 	int i;
-	TGroup *last = net->groups + (net->groupCount - 1);
+	TGroup *last = net->groups + (GROUP_COUNT - 1);
 	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
 		putchar(last->inside.active[i] ? '1' : '0');
@@ -315,13 +299,13 @@ int main(void)
 	int i;
 	TNetwork net;
 	srand(time(NULL));
-	initNetwork(HIDDEN_GROUPS, NEURONS_IN_GROUP, &net);
+	initNetwork(&net);
 	for (i = 0; i < 1000; i++)
 	{
 		step(&net);
 		printResult(&net);
 	}
-	doneNetwork(NEURONS_IN_GROUP, &net);
+	doneNetwork(&net);
 	/* VecAdd<<<1, N>>>(A, B, C); */
 
 	return 0;
