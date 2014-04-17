@@ -85,8 +85,8 @@ typedef struct
 	/** Connections from another group
 	   connections[1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
-	TConnection **connections;
-	int *connectionCount;
+	TConnection connections[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	int connectionCount[NEURONS_IN_GROUP];
 } TGroup;
 
 /**
@@ -116,17 +116,12 @@ void initGroup(int index, TGroup *group)
 {
 	int i;
 
-	group->connections = (TConnection **) malloc(sizeof(TConnection *) * 
-		NEURONS_IN_GROUP);
-	group->connectionCount = (int *) malloc(sizeof(int) * NEURONS_IN_GROUP);
 	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
 		int j;
 
 		/* init connections from other groups */
 		group->connectionCount[i] = rand() % MAX_EXTERNAL_CONNECTIONS;
-		group->connections[i] = (TConnection *)
-			malloc(sizeof(TConnection) * group->connectionCount[i]);
 		for (j = 0; j < group->connectionCount[i]; j++)
 		{
 			TConnection *conn = group->connections[i] + j;
@@ -155,20 +150,6 @@ void initGroup(int index, TGroup *group)
 }
 
 /**
- Releases all the memory used by the group and its neuron.
- */
-void doneGroup(TGroup *group)
-{
-	int i;
-	for (i = 0; i < NEURONS_IN_GROUP; i++)
-	{
-		free(group->connections[i]);
-	}
-	free(group->connections);
-	free(group->connectionCount);
-}
-
-/**
  Inits every single group of the network. 
  */
 void initNetwork(TNetwork *net)
@@ -178,18 +159,6 @@ void initNetwork(TNetwork *net)
 	for (i = 0; i < GROUP_COUNT; i++)
 	{
 		initGroup(i, net->groups + i);
-	}
-}
-
-/**
- Releases all the memory used by the network.
- */
-void doneNetwork(TNetwork *net)
-{
-	int i;
-	for (i = 0; i < GROUP_COUNT; i++)
-	{
-		doneGroup(net->groups + i);
 	}
 }
 
@@ -305,7 +274,7 @@ int main(void)
 		step(&net);
 		printResult(&net);
 	}
-	doneNetwork(&net);
+
 	/* VecAdd<<<1, N>>>(A, B, C); */
 
 	return 0;
