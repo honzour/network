@@ -267,8 +267,8 @@ void printResult(TNetwork *net)
 
 __global__ void updatePotentials(TNetwork *net)
 {
-	int g = threadIdx.x;
-    int n = threadIdx.y;
+	int g = blockIdx.x;
+	int n = threadIdx.x;
 
 	TGroup *group = net->groups + g;
 	/* for each neuron in the group */
@@ -306,8 +306,8 @@ __global__ void updatePotentials(TNetwork *net)
 
 __global__ void updateActive(TNetwork *net)
 {
-	int g = threadIdx.x;
-    int n = threadIdx.y;
+	int g = blockIdx.x;
+	int n = threadIdx.x;
 
 	TGroup *group = net->groups + g;
  
