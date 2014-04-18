@@ -98,14 +98,6 @@ typedef struct
 	TGroup groups[GROUP_COUNT];
 } TNetwork;
 
-/*
-// Kernel definition
-__global__ void VecAdd(float* A, float* B, float* C)
-{
-	int i = threadIdx.x;
-	C[i] = A[i] + B[i];
-}
-*/
 
 /**
 	Init a single group of neurons
@@ -251,7 +243,7 @@ void step(TNetwork *net)
 	}
 }
 
-/* print the output of thenetwork */
+/* print the output of the network */
 void printResult(TNetwork *net)
 {
 	int i;
@@ -265,6 +257,9 @@ void printResult(TNetwork *net)
 
 #else
 
+/**
+	One step of computing - updating of potentials
+*/
 __global__ void updatePotentials(TNetwork *net)
 {
 	int g = blockIdx.x;
@@ -304,6 +299,9 @@ __global__ void updatePotentials(TNetwork *net)
 	group->inside.potentials[n] += group->inside.inputs[n];
 }
 
+/**
+	One step of computing - updating of active states
+*/
 __global__ void updateActive(TNetwork *net)
 {
 	int g = blockIdx.x;
@@ -322,28 +320,34 @@ __global__ void updateActive(TNetwork *net)
 	}
 }
 
-/* print the output of thenetwork */
-void printResult(TNetwork *d_net)
+/**
+	Copy active states from the output group from the device memory
+*/
+__global__ void getOutput(TNetwork *net, unsigned char *output)
 {
+	int n = threadIdx.x;
 
-	/* TODO do not copy all !!! */
-	TNetwork net;
-	cudaMemcpy(&net, d_net, sizeof(TNetwork), cudaMemcpyDeviceToHost);
+	output[n] = net->groups[GROUP_COUNT - 1].inside.active[n];
+}
 
+/* print the output of the network */
+void printResult(unsigned char *active)
+{
 	int i;
-	TGroup *last = net.groups + (GROUP_COUNT - 1);
+
 	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
-		putchar(last->inside.active[i] ? '1' : '0');
+		putchar(active[i] ? '1' : '0');
 	}
 	puts("");
 }
+
 #endif
 
 
 int main(void)
 {
-	int i;
+	int i, j;
 	TNetwork *net = (TNetwork *)malloc(sizeof(TNetwork));
 	srand(time(NULL));
 	initNetwork(net);
@@ -357,13 +361,17 @@ int main(void)
 #else
 	
 	TNetwork *d_net;
+
 	cudaMalloc(&d_net, sizeof(TNetwork));
 	cudaMemcpy(d_net, net, sizeof(TNetwork), cudaMemcpyHostToDevice); 
 	for (i = 0; i < 1000; i++)
 	{
+		unsigned char active[NEURONS_IN_GROUP];
+
 		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
 		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
-		printResult(d_net);
+		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active)
+		printResult(active);
 	}
 	cudaFree(d_net);
 #endif
