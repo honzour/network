@@ -370,7 +370,7 @@ int main(void)
 
 		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
 		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
-		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active)
+		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active);
 		printResult(active);
 	}
 	cudaFree(d_net);
