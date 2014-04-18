@@ -347,7 +347,7 @@ void printResult(unsigned char *active)
 
 int main(void)
 {
-	int i, j;
+	int i;
 	TNetwork *net = (TNetwork *)malloc(sizeof(TNetwork));
 	srand(time(NULL));
 	initNetwork(net);
