@@ -342,6 +342,18 @@ void printResult(unsigned char *active)
 	puts("");
 }
 
+void checkAndHandleCudaError(const char *function)
+{
+	cudaError_t e;
+	e = cudaGetLastError();
+	if (e != cudaSuccess)
+	{
+		fprintf(stderr, "Error %u in %s (%s), exiting\n",
+			(unsigned) e, function, cudaGetErrorString(e));
+		exit(1);
+	}
+}
+
 #endif
 
 
@@ -368,9 +380,16 @@ int main(void)
 	{
 		unsigned char active[NEURONS_IN_GROUP];
 
+
 		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
+		checkAndHandleCudaError("updatePotentials");
+		
 		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
+		checkAndHandleCudaError("updateActive");
+
 		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active);
+		checkAndHandleCudaError("getOutput");
+
 		printResult(active);
 	}
 	cudaFree(d_net);
