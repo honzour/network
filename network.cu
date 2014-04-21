@@ -135,8 +135,12 @@ void initGroup(int index, TGroup *group)
 	
 	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
-		group->inside.inputs[i] = index ? 0 : ((rand()  % INPUT_RAND) /
-			(FLOAT_TYPE) DIVIDE_COEF);
+		group->inside.inputs[i] = index ? 0 :
+			/* "normal" distribution to get more stable result */
+			(
+				(rand()  % INPUT_RAND) + (rand()  % INPUT_RAND) + 
+				(rand()  % INPUT_RAND) + (rand()  % INPUT_RAND)
+			) /	(FLOAT_TYPE) (DIVIDE_COEF * 4);
 		group->inside.tresholds[i] = (1 + (rand()  % TRESHOLD_RAND)) /
 			(FLOAT_TYPE) DIVIDE_COEF;
 		group->inside.potentials[i] = 0;
