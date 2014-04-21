@@ -12,7 +12,7 @@
 */
 
 /** Compile as emulation or use CUDA */
-#define EMULATION 1
+#define EMULATION 0
 
 /** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
@@ -158,9 +158,11 @@ void initNetwork(TNetwork *net)
 }
 
 /* print the sinle line of the output */
-void printOutputArray(const unsigned char *output)
+void printOutputArray(int line, const unsigned char *output)
 {
 	int i;
+
+	printf("%i ", line);
 	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
 		putchar(output[i] ? '1' : '0');
@@ -258,10 +260,10 @@ void step(TNetwork *net)
 }
 
 /* print the output of the network */
-void printResult(TNetwork *net)
+void printResult(int line, TNetwork *net)
 {
 	TGroup *last = net->groups + (GROUP_COUNT - 1);
-	printOutputArray(last->inside.active);
+	printOutputArray(line, last->inside.active);
 }
 
 #else
@@ -381,7 +383,7 @@ int main(void)
 	for (i = 0; i < ITERATIONS; i++)
 	{
 		step(net);
-		printResult(net);
+		printResult(i, net);
 	}
 #else
 	
@@ -405,7 +407,7 @@ int main(void)
 		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active);
 		checkAndHandleKernelError("getOutput");
 
-		printOutputArray(active);
+		printOutputArray(i, active);
 	}
 	checkAndHandleFunctionError(cudaFree(d_net), "cudaFree");
 #endif
