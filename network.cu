@@ -342,15 +342,31 @@ void printResult(unsigned char *active)
 	puts("");
 }
 
-void checkAndHandleCudaError(const char *function)
+/** report error and exit */
+void handleError(cudaError_t e, const char *function)
+{
+	fprintf(stderr, "Error %u in %s (%s), exiting\n",
+		(unsigned) e, function, cudaGetErrorString(e));
+	exit(1);
+}
+
+/** check cudaGetLastError() */
+void checkAndHandleKernelError(const char *function)
 {
 	cudaError_t e;
 	e = cudaGetLastError();
 	if (e != cudaSuccess)
 	{
-		fprintf(stderr, "Error %u in %s (%s), exiting\n",
-			(unsigned) e, function, cudaGetErrorString(e));
-		exit(1);
+		handleError(e, function);
+	}
+}
+
+/** check the function call return code */
+void checkAndHandleFunctionError(cudaError_t e, const char *function)
+{
+	if (e != cudaSuccess)
+	{
+		handleError(e, function);
 	}
 }
 
@@ -374,25 +390,27 @@ int main(void)
 	
 	TNetwork *d_net;
 
-	cudaMalloc(&d_net, sizeof(TNetwork));
-	cudaMemcpy(d_net, net, sizeof(TNetwork), cudaMemcpyHostToDevice); 
+	checkAndHandleFunctionError(cudaMalloc(&d_net, sizeof(TNetwork)),
+		"cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_net, net, sizeof(TNetwork),
+		cudaMemcpyHostToDevice), "cudaMemcpy"); 
 	for (i = 0; i < 1000; i++)
 	{
 		unsigned char active[NEURONS_IN_GROUP];
 
 
 		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
-		checkAndHandleCudaError("updatePotentials");
+		checkAndHandleKernelError("updatePotentials");
 		
 		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
-		checkAndHandleCudaError("updateActive");
+		checkAndHandleKernelError("updateActive");
 
 		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active);
-		checkAndHandleCudaError("getOutput");
+		checkAndHandleKernelError("getOutput");
 
 		printResult(active);
 	}
-	cudaFree(d_net);
+	checkAndHandleFunctionError(cudaFree(d_net), "cudaFree");
 #endif
 
 	free(net);
