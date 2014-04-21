@@ -12,7 +12,7 @@
 */
 
 /** Compile as emulation or use CUDA */
-#define EMULATION 0
+#define EMULATION 1
 
 /** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
@@ -37,6 +37,9 @@
 
 /** bigger INPUT_RAND -> bigger input in the input layer */
 #define INPUT_RAND 256
+
+/** how many steps to copmpute */
+#define ITERATIONS 1000
 
 /*
 	Global types
@@ -154,6 +157,17 @@ void initNetwork(TNetwork *net)
 	}
 }
 
+/* print the sinle line of the output */
+void printOutputArray(const unsigned char *output)
+{
+	int i;
+	for (i = 0; i < NEURONS_IN_GROUP; i++)
+	{
+		putchar(output[i] ? '1' : '0');
+	}
+	puts("");
+}
+
 #if EMULATION
 
 /**
@@ -246,13 +260,8 @@ void step(TNetwork *net)
 /* print the output of the network */
 void printResult(TNetwork *net)
 {
-	int i;
 	TGroup *last = net->groups + (GROUP_COUNT - 1);
-	for (i = 0; i < NEURONS_IN_GROUP; i++)
-	{
-		putchar(last->inside.active[i] ? '1' : '0');
-	}
-	puts("");
+	printOutputArray(last->inside.active);
 }
 
 #else
@@ -330,18 +339,6 @@ __global__ void getOutput(TNetwork *net, unsigned char *output)
 	output[n] = net->groups[GROUP_COUNT - 1].inside.active[n];
 }
 
-/* print the output of the network */
-void printResult(unsigned char *active)
-{
-	int i;
-
-	for (i = 0; i < NEURONS_IN_GROUP; i++)
-	{
-		putchar(active[i] ? '1' : '0');
-	}
-	puts("");
-}
-
 /** report error and exit */
 void handleError(cudaError_t e, const char *function)
 {
@@ -381,7 +378,7 @@ int main(void)
 	initNetwork(net);
 
 #if EMULATION
-	for (i = 0; i < 1000; i++)
+	for (i = 0; i < ITERATIONS; i++)
 	{
 		step(net);
 		printResult(net);
@@ -394,7 +391,7 @@ int main(void)
 		"cudaMalloc");
 	checkAndHandleFunctionError(cudaMemcpy(d_net, net, sizeof(TNetwork),
 		cudaMemcpyHostToDevice), "cudaMemcpy"); 
-	for (i = 0; i < 1000; i++)
+	for (i = 0; i < ITERATIONS; i++)
 	{
 		unsigned char active[NEURONS_IN_GROUP];
 
@@ -408,7 +405,7 @@ int main(void)
 		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active);
 		checkAndHandleKernelError("getOutput");
 
-		printResult(active);
+		printOutputArray(active);
 	}
 	checkAndHandleFunctionError(cudaFree(d_net), "cudaFree");
 #endif
