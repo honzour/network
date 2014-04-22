@@ -157,7 +157,6 @@ void step(TNetwork *net)
 			/* for each connection (from the other group) of the neuron */
 			for (k = 0; k < net->connectionCount[i][j]; k++)
 			{
-				//TConnection *conn = group->connections[j] + k;
 				/* if the other neuron is active*/
 				if (
 				    net->active
@@ -239,25 +238,24 @@ __global__ void updatePotentials(TNetwork *net)
 {
 	int g = blockIdx.x;
 	int n = threadIdx.x;
-
-	TGroup *group = net->groups + g;
-	/* for each neuron in the group */
 	
 	int k;
 	/* for each connection (from the other group) of the neuron */
-	for (k = 0; k < group->connectionCount[n]; k++)
+	for (k = 0; k < net->connectionCount[g][n]; k++)
 	{
-		TConnection *conn = group->connections[n] + k;
-		/* if the other neuron is active*/
-		if (net->groups[conn->group].active[conn->neuron])
+		if (
+		    net->active
+		    	[ net->connection_group[g][n][k] ]
+				[ net->connection_neuron[g][n][k] ]
+		    )
 		{
 			/* add a bonus to our potential */
-			group->potentials[n] += conn->w;
+			net->potentials[g][n] += net->connection_w[g][n][k];
 		}
 	}
 
-	FLOAT_TYPE *ptrW = group->w + n * NEURONS_IN_GROUP;
-	unsigned char *ptrA = group->active;
+	FLOAT_TYPE *ptrW = net->w[g] + n * NEURONS_IN_GROUP;
+	unsigned char *ptrA = net->active[g];
 
 	/* for each connection */
 	for (k = 0; k < NEURONS_IN_GROUP; k++)
@@ -265,13 +263,13 @@ __global__ void updatePotentials(TNetwork *net)
 		if (*ptrA)
 		{
 			/* add the weight if the neuron is active */
-			group->potentials[n] += *ptrW;
+			net->potentials[g][n] += *ptrW;
 		} 
 		ptrW++;
 		ptrA++;
 	}
 	/* Add input to the potential */ 
-	group->potentials[n] += group->inputs[n];
+	net->potentials[g][n] += net->inputs[g][n];
 }
 
 /**
@@ -281,28 +279,27 @@ __global__ void updateActive(TNetwork *net)
 {
 	int g = blockIdx.x;
 	int n = threadIdx.x;
-
-	TGroup *group = net->groups + g;
  
-	if (group->potentials[n] >= group->tresholds[n])
+	if (net->potentials[n] >= net->tresholds[n])
 	{
-		group->potentials[n] = 0;
-		group->active[n] = 1;
+		net->potentials[g][n] = 0;
+		net->active[g][n] = 1;
 	}
 	else
 	{
-		group->active[n] = 0;
+		net->active[g][n] = 0;
 	}
 }
 
 /**
 	Copy active states from the output group from the device memory
+ 	TODO - make this faster 
 */
 __global__ void getOutput(TNetwork *net, unsigned char *output)
 {
 	int n = threadIdx.x;
 
-	output[n] = net->groups[GROUP_COUNT - 1].active[n];
+	output[n] = net->active[GROUP_COUNT - 1][n];
 }
 
 /** report error and exit */
