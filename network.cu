@@ -48,19 +48,6 @@
 /** we will compute in this type */
 typedef float FLOAT_TYPE;
 
-/**
- Connection between groups
- */
-typedef struct
-{
-	/** from group index */
-	int group;
-	/** from neuron (inside of the group) index */
-	int neuron;
-	/** weight */
-	FLOAT_TYPE w;
-} TConnection;
-
 /** Group of neurons */
 typedef struct
 {
@@ -77,9 +64,12 @@ typedef struct
 	/* is each neuron active in the curren step */
 	unsigned char active[NEURONS_IN_GROUP]; 
 	/** Connections from another group
-	   connections[1][2] is the third (0, 1, 2) connection of the second (0, 1)
+	   connections_xx[1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
-	TConnection connections[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	int connection_group[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	int connection_neuron[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	int connection_w[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	/** number of external connections */
 	int connectionCount[NEURONS_IN_GROUP];
 } TGroup;
 
@@ -110,10 +100,9 @@ void initGroup(int index, TGroup *group)
 		group->connectionCount[i] = rand() % MAX_EXTERNAL_CONNECTIONS;
 		for (j = 0; j < group->connectionCount[i]; j++)
 		{
-			TConnection *conn = group->connections[i] + j;
-			conn->group = rand() % GROUP_COUNT;
-			conn->neuron = rand() % NEURONS_IN_GROUP;
-			conn->w = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
+			group->connection_group[i][j] = rand() % GROUP_COUNT;
+			group->connection_neuron[i][j] = rand() % NEURONS_IN_GROUP;
+			group->connection_w[i][j] = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 		}
 	}
 	/* init connections inside this group */
@@ -189,12 +178,13 @@ void step(TNetwork *net)
 			/* for each connection (from the other group) of the neuron */
 			for (k = 0; k < group->connectionCount[j]; k++)
 			{
-				TConnection *conn = group->connections[j] + k;
+				//TConnection *conn = group->connections[j] + k;
 				/* if the other neuron is active*/
-				if (net->groups[conn->group].active[conn->neuron])
+				if (net->groups[group->connection_group[j][k]].
+						active[group->connection_neuron[j][k]])
 				{
 					/* add a bonus to our potential */
-					group->potentials[j] += conn->w;
+					group->potentials[j] += group->connection_w[j][k];
 				}
 			}
 		}
