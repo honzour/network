@@ -70,7 +70,7 @@ typedef struct
 	int connection_neuron[GROUP_COUNT * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS];
 	FLOAT_TYPE connection_w[GROUP_COUNT * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS];
 	/** number of external connections */
-	int connectionCount[GROUP_COUNT * NEURONS_IN_GROUP];
+	int connection_count[GROUP_COUNT * NEURONS_IN_GROUP];
 } TNetwork;
 
 /**
@@ -89,7 +89,7 @@ void initNetwork(TNetwork *net)
 			int j;
 
 			/* init connections from other groups */
-			int limit = net->connectionCount[group * NEURONS_IN_GROUP + i] = rand() % MAX_EXTERNAL_CONNECTIONS;
+			int limit = net->connection_count[group * NEURONS_IN_GROUP + i] = rand() % MAX_EXTERNAL_CONNECTIONS;
 			for (j = 0; j < limit; j++)
 			{
 				int index = group * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS
@@ -159,7 +159,7 @@ void step(TNetwork *net)
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
 			int k;
-			int limit = net->connectionCount[i * NEURONS_IN_GROUP + j];
+			int limit = net->connection_count[i * NEURONS_IN_GROUP + j];
 			/* for each connection (from the other group) of the neuron */
 			for (k = 0; k < limit; k++)
 			{
@@ -248,14 +248,17 @@ void printResult(int line, TNetwork *net)
 /**
 	One step of computing - updating of potentials
 */
-__global__ void updatePotentials(TNetwork *net)
+__global__ void updatePotentials(int *d_connection_count,
+	unsigned char *d_active, int *d_connection_group,
+	int *d_connection_neuron, FLOAT_TYPE *d_connection_w,
+	FLOAT_TYPE *d_potentials, FLOAT_TYPE *d_w, FLOAT_TYPE *d_inputs)
 {
 	int g = blockIdx.x;
 	int n = threadIdx.x;
 	
 	int k;
 	int index = NEURONS_IN_GROUP * g + n;
-	int limit = net->connectionCount[index];
+	int limit = d_connection_count[index];
 	
 	
 	/* for each connection (from the other group) of the neuron */
@@ -264,21 +267,21 @@ __global__ void updatePotentials(TNetwork *net)
 		int index2 = g * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS
 					+ n * MAX_EXTERNAL_CONNECTIONS + k;
 		if (
-		    net->active
-		    	[NEURONS_IN_GROUP * net->connection_group[index2] +
-				 net->connection_neuron[index2] ]
+		    d_active
+		    	[NEURONS_IN_GROUP * d_connection_group[index2] +
+				 d_connection_neuron[index2] ]
 		    )
 		{
 			/* add a bonus to our potential */
-			net->potentials[index] += net->connection_w[index2];
+			d_potentials[index] += d_connection_w[index2];
 		}
 	}
 
-	FLOAT_TYPE *ptrW = net->w + 
+	FLOAT_TYPE *ptrW = d_w + 
 		g * (NEURONS_IN_GROUP * NEURONS_IN_GROUP) +
 		n * NEURONS_IN_GROUP;
 			
-	unsigned char *ptrA = net->active + g * NEURONS_IN_GROUP;
+	unsigned char *ptrA = d_active + g * NEURONS_IN_GROUP;
 
 	/* for each connection */
 	for (k = 0; k < NEURONS_IN_GROUP; k++)
@@ -286,44 +289,34 @@ __global__ void updatePotentials(TNetwork *net)
 		if (*ptrA)
 		{
 			/* add the weight if the neuron is active */
-			net->potentials[index] += *ptrW;
+			d_potentials[index] += *ptrW;
 		} 
 		ptrW++;
 		ptrA++;
 	}
 	/* Add input to the potential */ 
-	net->potentials[index] += net->inputs[index];
+	d_potentials[index] += d_inputs[index];
 }
 
 /**
 	One step of computing - updating of active states
 */
-__global__ void updateActive(TNetwork *net)
+__global__ void updateActive(FLOAT_TYPE *d_potentials,
+	FLOAT_TYPE *d_tresholds, unsigned char *d_active)
 {
 	int g = blockIdx.x;
 	int n = threadIdx.x;
 	int index = NEURONS_IN_GROUP * g + n;
  
-	if (net->potentials[index] >= net->tresholds[index])
+	if (d_potentials[index] >= d_tresholds[index])
 	{
-		net->potentials[index] = 0;
-		net->active[index] = 1;
+		d_potentials[index] = 0;
+		d_active[index] = 1;
 	}
 	else
 	{
-		net->active[index] = 0;
+		d_active[index] = 0;
 	}
-}
-
-/**
-	Copy active states from the output group from the device memory
- 	TODO - make this faster 
-*/
-__global__ void getOutput(TNetwork *net, unsigned char *output)
-{
-	int n = threadIdx.x;
-
-	output[n] = net->active[(GROUP_COUNT - 1) * NEURONS_IN_GROUP + n];
 }
 
 /** report error and exit */
@@ -371,30 +364,97 @@ int main(void)
 		printResult(i, net);
 	}
 #else
-	
-	TNetwork *d_net;
 
-	checkAndHandleFunctionError(cudaMalloc(&d_net, sizeof(TNetwork)),
-		"cudaMalloc");
-	checkAndHandleFunctionError(cudaMemcpy(d_net, net, sizeof(TNetwork),
-		cudaMemcpyHostToDevice), "cudaMemcpy"); 
+	FLOAT_TYPE *d_w;
+	FLOAT_TYPE *d_inputs;
+	FLOAT_TYPE *d_tresholds;
+	FLOAT_TYPE *d_potentials;
+	unsigned char *d_active; 
+	int *d_connection_group;
+	int *d_connection_neuron;
+	FLOAT_TYPE *d_connection_w;
+	int *d_connection_count;
+
+	int w_size = sizeof(FLOAT_TYPE) * GROUP_COUNT * NEURONS_IN_GROUP *
+		NEURONS_IN_GROUP;
+	checkAndHandleFunctionError(cudaMalloc(&d_w, w_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_w, net->w, w_size,
+		cudaMemcpyHostToDevice), "cudaMemcpy");
+
+	int inputs_size = sizeof(FLOAT_TYPE) * GROUP_COUNT * NEURONS_IN_GROUP;
+	checkAndHandleFunctionError(cudaMalloc(&d_inputs, inputs_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_inputs, net->inputs, inputs_size,
+		cudaMemcpyHostToDevice), "cudaMemcpy");
+
+	checkAndHandleFunctionError(cudaMalloc(&d_tresholds, inputs_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_tresholds, net->tresholds, inputs_size,
+		cudaMemcpyHostToDevice), "cudaMemcpy");
+
+	checkAndHandleFunctionError(cudaMalloc(&d_potentials, inputs_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_potentials, net->potentials, inputs_size,
+		cudaMemcpyHostToDevice), "cudaMemcpy");
+
+	int active_size = sizeof(unsigned char) * GROUP_COUNT * NEURONS_IN_GROUP;
+	checkAndHandleFunctionError(cudaMalloc(&d_active, active_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_active, net->active, active_size,
+		cudaMemcpyHostToDevice), "cudaMemcpy");
+
+	int connection_group_size = sizeof(int) * GROUP_COUNT * NEURONS_IN_GROUP *
+		MAX_EXTERNAL_CONNECTIONS;
+	checkAndHandleFunctionError(cudaMalloc(&d_connection_group,
+		connection_group_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_connection_group,
+		net->connection_group, connection_group_size, cudaMemcpyHostToDevice),
+	"cudaMemcpy");
+
+	checkAndHandleFunctionError(cudaMalloc(&d_connection_neuron,
+		connection_group_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_connection_neuron,
+		net->connection_neuron, connection_group_size, cudaMemcpyHostToDevice),
+	"cudaMemcpy");
+
+	int connection_w_size = sizeof(FLOAT_TYPE) * GROUP_COUNT * NEURONS_IN_GROUP
+		* MAX_EXTERNAL_CONNECTIONS;
+	checkAndHandleFunctionError(cudaMalloc(&d_connection_w,
+		connection_w_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_connection_w,
+		net->connection_w, connection_w_size, cudaMemcpyHostToDevice),
+	"cudaMemcpy");
+
+	int connection_count_size = sizeof(int) * GROUP_COUNT * NEURONS_IN_GROUP;
+	checkAndHandleFunctionError(cudaMalloc(&d_connection_count,
+		connection_count_size), "cudaMalloc");
+	checkAndHandleFunctionError(cudaMemcpy(d_connection_count,
+		net->connection_count, connection_count_size, cudaMemcpyHostToDevice),
+	"cudaMemcpy");
+ 
 	for (i = 0; i < ITERATIONS; i++)
 	{
 		unsigned char active[NEURONS_IN_GROUP];
 
-
-		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
+		updatePotentials<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_connection_count,
+			d_active, d_connection_group, d_connection_neuron, d_connection_w,
+			d_potentials, d_w, d_inputs);
 		checkAndHandleKernelError("updatePotentials");
 		
-		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_net);
+		updateActive<<<GROUP_COUNT, NEURONS_IN_GROUP>>>(d_potentials,
+			d_tresholds, d_active);
 		checkAndHandleKernelError("updateActive");
 
-		getOutput<<<1, NEURONS_IN_GROUP>>>(d_net, active);
-		checkAndHandleKernelError("getOutput");
+		checkAndHandleFunctionError(cudaMemcpy(active, d_active,
+			sizeof(unsigned char), cudaMemcpyDeviceToHost), "cudaMemcpy");
 
 		printOutputArray(i, active);
 	}
-	checkAndHandleFunctionError(cudaFree(d_net), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_w), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_inputs), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_potentials), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_tresholds), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_active), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_connection_group), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_connection_neuron), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_connection_w), "cudaFree");
+	checkAndHandleFunctionError(cudaFree(d_connection_count), "cudaFree");
 #endif
 
 	free(net);
