@@ -445,7 +445,8 @@ int main(void)
 		checkAndHandleKernelError("updateActive");
 
 		checkAndHandleFunctionError(cudaMemcpy(active, d_active,
-			sizeof(unsigned char), cudaMemcpyDeviceToHost), "cudaMemcpy");
+			sizeof(unsigned char) * NEURONS_IN_GROUP, cudaMemcpyDeviceToHost),
+			"cudaMemcpy");
 		printOutputArray(i, active);
 	}
 
