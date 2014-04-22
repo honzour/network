@@ -12,7 +12,7 @@
 */
 
 /** Compile as emulation or use CUDA */
-#define EMULATION 1
+#define EMULATION 0
 
 /** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
