@@ -12,7 +12,7 @@
 */
 
 /** Compile as emulation or use CUDA */
-#define EMULATION 0
+#define EMULATION 1
 
 /** Number of non input and non output groups of neuron */
 #define HIDDEN_GROUPS 5
@@ -49,8 +49,19 @@
 typedef float FLOAT_TYPE;
 
 /**
-	Data inside of each group (without connections to other groups)
-*/
+ Connection between groups
+ */
+typedef struct
+{
+	/** from group index */
+	int group;
+	/** from neuron (inside of the group) index */
+	int neuron;
+	/** weight */
+	FLOAT_TYPE w;
+} TConnection;
+
+/** Group of neurons */
 typedef struct
 {
 	/* full matrix NEURONS_IN_GROUP * NEURONS_IN_GROUP
@@ -65,26 +76,6 @@ typedef struct
 	FLOAT_TYPE potentials[NEURONS_IN_GROUP];
 	/* is each neuron active in the curren step */
 	unsigned char active[NEURONS_IN_GROUP]; 
-} TGroupInternal;
-
-/**
- Connection between groups
- */
-typedef struct
-{
-	/** from group index */
-	int group;
-	/** from neuron (inside of the group) index */
-	int neuron;
-	/** weight */
-	FLOAT_TYPE w;
-} TConnection;
-
-/** Group inluding without connections to other groups */
-typedef struct
-{
-	/** Internal group data */
-	TGroupInternal inside;
 	/** Connections from another group
 	   connections[1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
@@ -129,22 +120,22 @@ void initGroup(int index, TGroup *group)
 	
  	for (i = 0; i < NEURONS_IN_GROUP * NEURONS_IN_GROUP; i++)
 	{
-		group->inside.w[i] = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
+		group->w[i] = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 	}
 	/* init all the data for each neuron */
 	
 	for (i = 0; i < NEURONS_IN_GROUP; i++)
 	{
-		group->inside.inputs[i] = index ? 0 :
+		group->inputs[i] = index ? 0 :
 			/* "normal" distribution to get more stable result */
 			(
 				(rand()  % INPUT_RAND) + (rand()  % INPUT_RAND) + 
 				(rand()  % INPUT_RAND) + (rand()  % INPUT_RAND)
 			) /	(FLOAT_TYPE) (DIVIDE_COEF * 4);
-		group->inside.tresholds[i] = (1 + (rand()  % TRESHOLD_RAND)) /
+		group->tresholds[i] = (1 + (rand()  % TRESHOLD_RAND)) /
 			(FLOAT_TYPE) DIVIDE_COEF;
-		group->inside.potentials[i] = 0;
-		group->inside.active[i] = 0;
+		group->potentials[i] = 0;
+		group->active[i] = 0;
 	}
 }
 
@@ -200,10 +191,10 @@ void step(TNetwork *net)
 			{
 				TConnection *conn = group->connections[j] + k;
 				/* if the other neuron is active*/
-				if (net->groups[conn->group].inside.active[conn->neuron])
+				if (net->groups[conn->group].active[conn->neuron])
 				{
 					/* add a bonus to our potential */
-					group->inside.potentials[j] += conn->w;
+					group->potentials[j] += conn->w;
 				}
 			}
 		}
@@ -221,8 +212,8 @@ void step(TNetwork *net)
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
 
-			FLOAT_TYPE *ptrW = group->inside.w + j * NEURONS_IN_GROUP;
-			unsigned char *ptrA = group->inside.active;
+			FLOAT_TYPE *ptrW = group->w + j * NEURONS_IN_GROUP;
+			unsigned char *ptrA = group->active;
 
 			/* for each connection */
 			for (k = 0; k < NEURONS_IN_GROUP; k++)
@@ -230,13 +221,13 @@ void step(TNetwork *net)
 				if (*ptrA)
 				{
 					/* add the weight if the neuron is active */
-					group->inside.potentials[j] += *ptrW;
+					group->potentials[j] += *ptrW;
 				} 
 				ptrW++;
 				ptrA++;
 			}
 			/* Add input to the potential */ 
-			group->inside.potentials[j] += group->inside.inputs[j];
+			group->potentials[j] += group->inputs[j];
 		}
 	}
 
@@ -250,14 +241,14 @@ void step(TNetwork *net)
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
 		/* Check tresholds and set active neuron*/
-			if (group->inside.potentials[j] >= group->inside.tresholds[j])
+			if (group->potentials[j] >= group->tresholds[j])
 			{
-				group->inside.potentials[j] = 0;
-				group->inside.active[j] = 1;
+				group->potentials[j] = 0;
+				group->active[j] = 1;
 			}
 			else
 			{
-				group->inside.active[j] = 0;
+				group->active[j] = 0;
 			}
 		}
 	}
@@ -267,7 +258,7 @@ void step(TNetwork *net)
 void printResult(int line, TNetwork *net)
 {
 	TGroup *last = net->groups + (GROUP_COUNT - 1);
-	printOutputArray(line, last->inside.active);
+	printOutputArray(line, last->active);
 }
 
 #else
@@ -289,15 +280,15 @@ __global__ void updatePotentials(TNetwork *net)
 	{
 		TConnection *conn = group->connections[n] + k;
 		/* if the other neuron is active*/
-		if (net->groups[conn->group].inside.active[conn->neuron])
+		if (net->groups[conn->group].active[conn->neuron])
 		{
 			/* add a bonus to our potential */
-			group->inside.potentials[n] += conn->w;
+			group->potentials[n] += conn->w;
 		}
 	}
 
-	FLOAT_TYPE *ptrW = group->inside.w + n * NEURONS_IN_GROUP;
-	unsigned char *ptrA = group->inside.active;
+	FLOAT_TYPE *ptrW = group->w + n * NEURONS_IN_GROUP;
+	unsigned char *ptrA = group->active;
 
 	/* for each connection */
 	for (k = 0; k < NEURONS_IN_GROUP; k++)
@@ -305,13 +296,13 @@ __global__ void updatePotentials(TNetwork *net)
 		if (*ptrA)
 		{
 			/* add the weight if the neuron is active */
-			group->inside.potentials[n] += *ptrW;
+			group->potentials[n] += *ptrW;
 		} 
 		ptrW++;
 		ptrA++;
 	}
 	/* Add input to the potential */ 
-	group->inside.potentials[n] += group->inside.inputs[n];
+	group->potentials[n] += group->inputs[n];
 }
 
 /**
@@ -324,14 +315,14 @@ __global__ void updateActive(TNetwork *net)
 
 	TGroup *group = net->groups + g;
  
-	if (group->inside.potentials[n] >= group->inside.tresholds[n])
+	if (group->potentials[n] >= group->tresholds[n])
 	{
-		group->inside.potentials[n] = 0;
-		group->inside.active[n] = 1;
+		group->potentials[n] = 0;
+		group->active[n] = 1;
 	}
 	else
 	{
-		group->inside.active[n] = 0;
+		group->active[n] = 0;
 	}
 }
 
@@ -342,7 +333,7 @@ __global__ void getOutput(TNetwork *net, unsigned char *output)
 {
 	int n = threadIdx.x;
 
-	output[n] = net->groups[GROUP_COUNT - 1].inside.active[n];
+	output[n] = net->groups[GROUP_COUNT - 1].active[n];
 }
 
 /** report error and exit */
