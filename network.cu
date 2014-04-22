@@ -68,7 +68,7 @@ typedef struct
        neuron */
 	int connection_group[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
 	int connection_neuron[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
-	int connection_w[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	FLOAT_TYPE connection_w[NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
 	/** number of external connections */
 	int connectionCount[NEURONS_IN_GROUP];
 } TGroup;
