@@ -53,24 +53,24 @@ typedef struct
 {
 	/* full matrix NEURONS_IN_GROUP * NEURONS_IN_GROUP
 	   weight from 1 to 2 is in w[group][1 + 2 * NEURONS_IN_GROUP]  */
-	FLOAT_TYPE w[GROUP_COUNT][NEURONS_IN_GROUP * NEURONS_IN_GROUP];
+	FLOAT_TYPE w[GROUP_COUNT * NEURONS_IN_GROUP * NEURONS_IN_GROUP];
 	/*	0 .. NEURONS_IN_GROUP
 		Fixed input (addes every step to potential of the neuron) */
-	FLOAT_TYPE inputs[GROUP_COUNT][NEURONS_IN_GROUP];
+	FLOAT_TYPE inputs[GROUP_COUNT * NEURONS_IN_GROUP];
 	/* 0 .. NEURONS_IN_GROUP */
-	FLOAT_TYPE tresholds[GROUP_COUNT][NEURONS_IN_GROUP];
+	FLOAT_TYPE tresholds[GROUP_COUNT * NEURONS_IN_GROUP];
 	/* 0 .. NEURONS_IN_GROUP */
-	FLOAT_TYPE potentials[GROUP_COUNT][NEURONS_IN_GROUP];
+	FLOAT_TYPE potentials[GROUP_COUNT * NEURONS_IN_GROUP];
 	/* is each neuron active in the curren step */
-	unsigned char active[GROUP_COUNT][NEURONS_IN_GROUP]; 
+	unsigned char active[GROUP_COUNT * NEURONS_IN_GROUP]; 
 	/** Connections from another group
 	   connections_xx[group][1][2] is the third (0, 1, 2) connection of the second (0, 1)
        neuron */
-	int connection_group[GROUP_COUNT][NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
-	int connection_neuron[GROUP_COUNT][NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
-	FLOAT_TYPE connection_w[GROUP_COUNT][NEURONS_IN_GROUP][MAX_EXTERNAL_CONNECTIONS];
+	int connection_group[GROUP_COUNT * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS];
+	int connection_neuron[GROUP_COUNT * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS];
+	FLOAT_TYPE connection_w[GROUP_COUNT * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS];
 	/** number of external connections */
-	int connectionCount[GROUP_COUNT][NEURONS_IN_GROUP];
+	int connectionCount[GROUP_COUNT * NEURONS_IN_GROUP];
 } TNetwork;
 
 /**
@@ -89,34 +89,39 @@ void initNetwork(TNetwork *net)
 			int j;
 
 			/* init connections from other groups */
-			net->connectionCount[group][i] = rand() % MAX_EXTERNAL_CONNECTIONS;
-			for (j = 0; j < net->connectionCount[group][i]; j++)
+			int limit = net->connectionCount[group * NEURONS_IN_GROUP + i] = rand() % MAX_EXTERNAL_CONNECTIONS;
+			for (j = 0; j < limit; j++)
 			{
-				net->connection_group[group][i][j] = rand() % GROUP_COUNT;
-				net->connection_neuron[group][i][j] = rand() % NEURONS_IN_GROUP;
-				net->connection_w[group][i][j] = ((rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF);
+				int index = group * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS
+					+ i * MAX_EXTERNAL_CONNECTIONS + j;
+				
+				net->connection_group[index] = rand() % GROUP_COUNT;
+				net->connection_neuron[index] = rand() % NEURONS_IN_GROUP;
+				net->connection_w[index] = ((rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF);
 			}
 		}
 		/* init connections inside this group */
 	
 	 	for (i = 0; i < NEURONS_IN_GROUP * NEURONS_IN_GROUP; i++)
 		{
-			net->w[group][i] = (rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
+			net->w[group * NEURONS_IN_GROUP * NEURONS_IN_GROUP + i] =
+				(rand() % WEIGHT_RAND) / (FLOAT_TYPE) DIVIDE_COEF;
 		}
 		/* init all the data for each neuron */
 	
 		for (i = 0; i < NEURONS_IN_GROUP; i++)
 		{
-			net->inputs[group][i] = group ? 0 :
+			int index = group * NEURONS_IN_GROUP + i;
+			net->inputs[index] = group ? 0 :
 				/* "normal" distribution to get more stable result */
 				(
 					(rand()  % INPUT_RAND) + (rand()  % INPUT_RAND) + 
 					(rand()  % INPUT_RAND) + (rand()  % INPUT_RAND)
 				) /	(FLOAT_TYPE) (DIVIDE_COEF * 4);
-			net->tresholds[group][i] = (1 + (rand()  % TRESHOLD_RAND)) /
+			net->tresholds[index] = (1 + (rand()  % TRESHOLD_RAND)) /
 				(FLOAT_TYPE) DIVIDE_COEF;
-			net->potentials[group][i] = 0;
-			net->active[group][i] = 0;
+			net->potentials[index] = 0;
+			net->active[index] = 0;
 		}
 	}
 }
@@ -154,18 +159,22 @@ void step(TNetwork *net)
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
 			int k;
+			int limit = net->connectionCount[i * NEURONS_IN_GROUP + j];
 			/* for each connection (from the other group) of the neuron */
-			for (k = 0; k < net->connectionCount[i][j]; k++)
+			for (k = 0; k < limit; k++)
 			{
+				int index = i * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS
+					+ j * MAX_EXTERNAL_CONNECTIONS + k;
 				/* if the other neuron is active*/
 				if (
 				    net->active
-				    	[ net->connection_group[i][j][k] ]
-						[ net->connection_neuron[i][j][k] ]
+				    	[ net->connection_group[index] * NEURONS_IN_GROUP + 
+						  net->connection_neuron[index] ]
 				    )
 				{
 					/* add a bonus to our potential */
-					net->potentials[i][j] += net->connection_w[i][j][k];
+					net->potentials[i * NEURONS_IN_GROUP + j] +=
+						net->connection_w[index];
 				}
 			}
 		}
@@ -182,8 +191,12 @@ void step(TNetwork *net)
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
 
-			FLOAT_TYPE *ptrW = net->w[i] + j * NEURONS_IN_GROUP;
-			unsigned char *ptrA = net->active[i];
+			FLOAT_TYPE *ptrW = net->w + 
+				i * (NEURONS_IN_GROUP * NEURONS_IN_GROUP) +
+				j * NEURONS_IN_GROUP;
+			
+			unsigned char *ptrA = net->active + i * NEURONS_IN_GROUP;
+			int index = i * NEURONS_IN_GROUP + j;
 
 			/* for each connection */
 			for (k = 0; k < NEURONS_IN_GROUP; k++)
@@ -191,13 +204,13 @@ void step(TNetwork *net)
 				if (*ptrA)
 				{
 					/* add the weight if the neuron is active */
-					net->potentials[i][j] += *ptrW;
+					net->potentials[index] += *ptrW;
 				} 
 				ptrW++;
 				ptrA++;
 			}
 			/* Add input to the potential */ 
-			net->potentials[i][j] += net->inputs[i][j];
+			net->potentials[index] += net->inputs[index];
 		}
 	}
 
@@ -209,15 +222,16 @@ void step(TNetwork *net)
 		/* for each neuron in the group */
 		for (j = 0; j < NEURONS_IN_GROUP; j++)
 		{
+			int index = i * NEURONS_IN_GROUP + j;
 		/* Check tresholds and set active neuron*/
-			if (net->potentials[i][j] >= net->tresholds[i][j])
+			if (net->potentials[index] >= net->tresholds[index])
 			{
-				net->potentials[i][j] = 0;
-				net->active[i][j] = 1;
+				net->potentials[index] = 0;
+				net->active[index] = 1;
 			}
 			else
 			{
-				net->active[i][j] = 0;
+				net->active[index] = 0;
 			}
 		}
 	}
@@ -226,7 +240,7 @@ void step(TNetwork *net)
 /* print the output of the network */
 void printResult(int line, TNetwork *net)
 {
-	printOutputArray(line, net->active[GROUP_COUNT - 1]);
+	printOutputArray(line, net->active + (GROUP_COUNT - 1) * NEURONS_IN_GROUP);
 }
 
 #else
