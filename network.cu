@@ -254,22 +254,31 @@ __global__ void updatePotentials(TNetwork *net)
 	int n = threadIdx.x;
 	
 	int k;
+	int index = NEURONS_IN_GROUP * g + n;
+	int limit = net->connectionCount[index];
+	
+	
 	/* for each connection (from the other group) of the neuron */
-	for (k = 0; k < net->connectionCount[g][n]; k++)
+	for (k = 0; k < limit; k++)
 	{
+		int index2 = g * NEURONS_IN_GROUP * MAX_EXTERNAL_CONNECTIONS
+					+ n * MAX_EXTERNAL_CONNECTIONS + k;
 		if (
 		    net->active
-		    	[ net->connection_group[g][n][k] ]
-				[ net->connection_neuron[g][n][k] ]
+		    	[NEURONS_IN_GROUP * net->connection_group[index2] +
+				 net->connection_neuron[index2] ]
 		    )
 		{
 			/* add a bonus to our potential */
-			net->potentials[g][n] += net->connection_w[g][n][k];
+			net->potentials[index] += net->connection_w[index2];
 		}
 	}
 
-	FLOAT_TYPE *ptrW = net->w[g] + n * NEURONS_IN_GROUP;
-	unsigned char *ptrA = net->active[g];
+	FLOAT_TYPE *ptrW = net->w + 
+		g * (NEURONS_IN_GROUP * NEURONS_IN_GROUP) +
+		n * NEURONS_IN_GROUP;
+			
+	unsigned char *ptrA = net->active + g * NEURONS_IN_GROUP;
 
 	/* for each connection */
 	for (k = 0; k < NEURONS_IN_GROUP; k++)
@@ -277,13 +286,13 @@ __global__ void updatePotentials(TNetwork *net)
 		if (*ptrA)
 		{
 			/* add the weight if the neuron is active */
-			net->potentials[g][n] += *ptrW;
+			net->potentials[index] += *ptrW;
 		} 
 		ptrW++;
 		ptrA++;
 	}
 	/* Add input to the potential */ 
-	net->potentials[g][n] += net->inputs[g][n];
+	net->potentials[index] += net->inputs[index];
 }
 
 /**
@@ -293,15 +302,16 @@ __global__ void updateActive(TNetwork *net)
 {
 	int g = blockIdx.x;
 	int n = threadIdx.x;
+	int index = NEURONS_IN_GROUP * g + n;
  
-	if (net->potentials[n] >= net->tresholds[n])
+	if (net->potentials[index] >= net->tresholds[index])
 	{
-		net->potentials[g][n] = 0;
-		net->active[g][n] = 1;
+		net->potentials[index] = 0;
+		net->active[index] = 1;
 	}
 	else
 	{
-		net->active[g][n] = 0;
+		net->active[index] = 0;
 	}
 }
 
@@ -313,7 +323,7 @@ __global__ void getOutput(TNetwork *net, unsigned char *output)
 {
 	int n = threadIdx.x;
 
-	output[n] = net->active[GROUP_COUNT - 1][n];
+	output[n] = net->active[(GROUP_COUNT - 1) * NEURONS_IN_GROUP + n];
 }
 
 /** report error and exit */
