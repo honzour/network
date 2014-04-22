@@ -48,7 +48,7 @@
 /** we will compute in this type */
 typedef float FLOAT_TYPE;
 
-/** Group of neurons */
+/** Network of neurons */
 typedef struct
 {
 	/* full matrix NEURONS_IN_GROUP * NEURONS_IN_GROUP
