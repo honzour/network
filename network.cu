@@ -365,6 +365,7 @@ int main(void)
 	}
 #else
 
+	/* arrays for kernels */
 	FLOAT_TYPE *d_w;
 	FLOAT_TYPE *d_inputs;
 	FLOAT_TYPE *d_tresholds;
@@ -375,6 +376,8 @@ int main(void)
 	FLOAT_TYPE *d_connection_w;
 	int *d_connection_count;
 
+	/* allocate the memory for kernels and copy from PC struct */
+	
 	int w_size = sizeof(FLOAT_TYPE) * GROUP_COUNT * NEURONS_IN_GROUP *
 		NEURONS_IN_GROUP;
 	checkAndHandleFunctionError(cudaMalloc(&d_w, w_size), "cudaMalloc");
@@ -443,9 +446,10 @@ int main(void)
 
 		checkAndHandleFunctionError(cudaMemcpy(active, d_active,
 			sizeof(unsigned char), cudaMemcpyDeviceToHost), "cudaMemcpy");
-
 		printOutputArray(i, active);
 	}
+
+	/* Free all the memory used by kernels */
 	checkAndHandleFunctionError(cudaFree(d_w), "cudaFree");
 	checkAndHandleFunctionError(cudaFree(d_inputs), "cudaFree");
 	checkAndHandleFunctionError(cudaFree(d_potentials), "cudaFree");
